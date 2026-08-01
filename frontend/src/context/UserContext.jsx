@@ -2,7 +2,7 @@ import React, { createContext, useEffect, useState } from 'react'
 import axios from 'axios';
 export const userDataContext = createContext()
 function UserContext({ children }) {
-    const serverUrl = import.meta.env.VITE_SERVER_URL || "http://localhost:3000"
+    const serverUrl = import.meta.env.VITE_SERVER_URL !== undefined ? import.meta.env.VITE_SERVER_URL : (import.meta.env.MODE === 'production' ? '' : 'http://localhost:3000');
     var [userData, setUserData] = useState(null);
     var [frontendImage, setFrontendImage] = useState(null);
     const [backendImage, setBackendImage] = useState(null);
