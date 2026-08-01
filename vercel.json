@@ -11,25 +11,17 @@
   },
   "rewrites": [
     {
-      "source": "/api(/.*)?",
+      "source": "/api/:path*",
       "destination": {
         "type": "service",
         "service": "backend"
       }
     },
     {
-      "source": "/((?!api/).*\\.(js|css|png|jpg|jpeg|gif|ico|svg|json|woff2?))",
+      "source": "/:path*",
       "destination": {
         "type": "service",
         "service": "frontend"
-      }
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": {
-        "type": "service",
-        "service": "frontend",
-        "path": "/index.html"
       }
     }
   ]
