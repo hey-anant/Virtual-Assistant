@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useContext } from 'react';
-const bg = '/assets/authBg.png';
+const bg = '/assets/authBg.gif';
 import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from "react-router-dom"
 import { userDataContext } from '../context/UserContext';
@@ -34,7 +34,7 @@ const SignIn = () => {
     }
   }
   return (
-    <div className='w-full min-h-screen flex justify-center items-center p-4' style={{ backgroundColor: 'rgb(218, 218, 211)' }}>
+    <div className='w-full min-h-screen flex justify-center items-center p-4 bg-cover bg-center' style={{ backgroundImage: `url(${bg})` }}>
       <form onSubmit={handleSignIn} className='w-full max-w-[400px] bg-[#00000055] backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl shadow-blue-950/50 flex flex-col items-center justify-center gap-4 p-5 md:p-6'>
         <h1 className='text-white text-[22px] md:text-[24px] font-semibold text-center mb-2'>Login into <span className='text-blue-400'>Virtual Assistant</span></h1>
 
