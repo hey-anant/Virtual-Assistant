@@ -1,31 +1,16 @@
 import mongoose from "mongoose";
 
 const connectDB = async () => {
+    if (mongoose.connection.readyState >= 1) {
+        return;
+    }
     try {
-        
-        // Set up connection event listeners before connecting
-        mongoose.connection.on("connected", () => {
-            console.log("MongoDB connected successfully");
+        await mongoose.connect(process.env.MONGODB_URI, {
+            dbName: 'virtualAssistant'
         });
-
-        // mongoose.connection.on("error", (err) => {
-        //     console.error("MongoDB connection error:", err);
-        // });
-
-        // mongoose.connection.on("disconnected", () => {
-        //     console.log("MongoDB disconnected");
-        // });
-
-        // Connect to MongoDB
-        const conn = await mongoose.connect(process.env.MONGODB_URI, {
-            dbName: 'virtualAssistant' // Specify database name as an option
-        });
-
-        // console.log(`MongoDB Connected: ${conn.connection.host}`);
-        
+        console.log("MongoDB connected successfully");
     } catch (error) {
         console.error("MongoDB connection failed:", error.message);
-        process.exit(1); // Exit process with failure
     }
 };
 
