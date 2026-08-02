@@ -1,10 +1,9 @@
+import { GoogleGenAI } from "@google/genai";
 import axios from "axios";
 
 const geminiResponse = async (command, assistantName, userName) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
-
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY not found in environment variables");
     }
@@ -37,39 +36,30 @@ Rules:
 3. Keep response short and natural (max 10 words)
 4. If someone asks who created you, mention ${userName}
 
-Examples:
-Input: "open youtube" → {"type":"youtube_search","userInput":"youtube","response":"Opening YouTube for you"}
-Input: "search for cat videos" → {"type":"google_search","userInput":"cat videos","response":"Searching for cat videos"}
-Input: "what time is it" → {"type":"get_time","userInput":"what time is it","response":"Let me check the time"}
-Input: "hello" → {"type":"general","userInput":"hello","response":"Hello! How can I help?"}
-Input: "who made you" → {"type":"general","userInput":"who made you","response":"I was created by ${userName}"}
-
 Now parse: "${command}"
 JSON response:`;
 
     console.log("Calling Gemini API...");
-    const result = await axios.post(
-      apiUrl,
-      {
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 200,
-        },
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-      }
-    );
+    let text = "";
 
-    let text = result.data.candidates[0].content.parts[0].text.trim();
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
+      });
+      text = response.text ? response.text.trim() : "";
+    } catch (sdkErr) {
+      console.warn("SDK call failed, trying direct v1beta endpoint...", sdkErr.message);
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+      const result = await axios.post(
+        apiUrl,
+        { contents: [{ parts: [{ text: prompt }] }] },
+        { headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey } }
+      );
+      text = result.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    }
+
     console.log("Gemini raw response:", text);
 
     // Clean up the response
@@ -79,35 +69,47 @@ JSON response:`;
       .replace(/`/g, "")
       .trim();
 
-    // If response doesn't start with {, try to find JSON in the text
     if (!text.startsWith("{")) {
       const jsonMatch = text.match(/{[\s\S]*}/);
       if (jsonMatch) {
         text = jsonMatch[0];
       } else {
-        // Create fallback JSON if no JSON found
-        console.warn("No JSON found, creating fallback");
         const fallbackResponse = {
           type: "general",
-          userInput: command
-            .replace(new RegExp(assistantName, "gi"), "")
-            .trim(),
+          userInput: command,
           response: text || "I'm here to help!",
         };
         text = JSON.stringify(fallbackResponse);
       }
     }
 
-    console.log("Cleaned response:", text);
     return text;
   } catch (error) {
-    console.error("Error fetching Gemini response:");
-    console.error("Message:", error.message);
-    if (error.response) {
-      console.error("Status:", error.response.status);
-      console.error("Data:", error.response.data);
+    console.error("Error fetching Gemini response:", error.message);
+    
+    // Fail-safe command parser fallback if AI service is temporarily unreachable
+    const cmdLower = (command || "").toLowerCase();
+    let fallback = { type: "general", userInput: command, response: "I am here to help you!" };
+
+    if (cmdLower.includes("youtube")) {
+      fallback = { type: "youtube_search", userInput: command.replace(/open|search|play|youtube/gi, "").trim() || "youtube", response: "Opening YouTube for you" };
+    } else if (cmdLower.includes("google") || cmdLower.includes("search")) {
+      fallback = { type: "google_search", userInput: command.replace(/google|search|for/gi, "").trim() || "search", response: "Searching on Google" };
+    } else if (cmdLower.includes("time")) {
+      fallback = { type: "get_time", userInput: "time", response: "Let me check the time" };
+    } else if (cmdLower.includes("date")) {
+      fallback = { type: "get_date", userInput: "date", response: "Let me check the date" };
+    } else if (cmdLower.includes("calculator")) {
+      fallback = { type: "calculator_open", userInput: "calculator", response: "Opening calculator" };
+    } else if (cmdLower.includes("instagram")) {
+      fallback = { type: "instagram_open", userInput: "instagram", response: "Opening Instagram" };
+    } else if (cmdLower.includes("facebook")) {
+      fallback = { type: "facebook_open", userInput: "facebook", response: "Opening Facebook" };
+    } else if (cmdLower.includes("weather")) {
+      fallback = { type: "weather_show", userInput: "weather", response: "Checking weather forecast" };
     }
-    throw error;
+
+    return JSON.stringify(fallback);
   }
 };
 
