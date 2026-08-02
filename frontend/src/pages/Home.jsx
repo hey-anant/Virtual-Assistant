@@ -22,8 +22,6 @@ const Home = () => {
   const [userText, setUserText] = useState("");
   const [aiText, setAiText] = useState("");
   const [listening, setListening] = useState(false);
-  const [textInput, setTextInput] = useState("");
-  const [isSubmittingText, setIsSubmittingText] = useState(false);
   const isSpeakingRef = useRef(false);
   const recognitionRef = useRef(null);
   const isRecognizingRef = useRef(false);
@@ -31,35 +29,7 @@ const Home = () => {
   const [ham, setHam] = useState(false);
   const isMountedRef = useRef(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
-  // Handle text command submission
-  const handleSendText = async (e) => {
-    if (e) e.preventDefault();
-    const command = textInput.trim();
-    if (!command || isSubmittingText) return;
-
-    setUserText(command);
-    setTextInput("");
-    setIsSubmittingText(true);
-    setAiText("Processing...");
-
-    try {
-      const data = await getGeminiResponse(command);
-      if (data && data.response) {
-        setAiText(data.response);
-        console.log("Response data from Gemini:", data);
-        handleCommand(data);
-      } else {
-        setAiText("Sorry, I couldn't process that request.");
-        speak("Sorry, I couldn't process that request.");
-      }
-    } catch (err) {
-      console.error("Text command error:", err);
-      setAiText("Sorry, an error occurred. Please try again.");
-      speak("Sorry, an error occurred. Please try again.");
-    } finally {
-      setIsSubmittingText(false);
-    }
-  };
+  const greetingUtteranceRef = useRef(null); // Track greeting separately
 
   const handleLogout = async () => {
     try {
@@ -609,73 +579,37 @@ const Home = () => {
         </h1>
       )}
 
-      {/* Dual Mode Command Bar (Text Input + Voice Mic Toggle + Send Button) */}
-      <div className="w-full max-w-[650px] px-4 absolute bottom-6 z-30 flex flex-col items-center gap-2">
-        {/* Voice status indicator if voice enabled */}
-        {voiceEnabled && (
-          <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-4 py-1 rounded-full text-white text-xs border border-white/10 shadow-md">
-            {listening ? (
-              <>
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span>Listening...</span>
-              </>
-            ) : isSpeakingRef.current ? (
-              <>
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                <span>Speaking...</span>
-              </>
-            ) : (
-              <>
-                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                <span>Voice Ready</span>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Input Bar */}
-        <form
-          onSubmit={handleSendText}
-          className="w-full flex items-center gap-2 bg-black/85 backdrop-blur-xl border border-white/20 p-2 pl-5 rounded-full shadow-2xl transition-all focus-within:border-blue-500"
+      {/* Enable Voice Button - Shows when voice is not enabled */}
+      {!voiceEnabled && (
+        <button
+          onClick={enableVoice}
+          className="absolute bottom-10 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full font-semibold shadow-lg transition-all transform hover:scale-105 cursor-pointer"
         >
-          <input
-            type="text"
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Type a command or use mic to speak..."
-            className="w-full bg-transparent outline-none text-white placeholder:text-gray-400 text-[15px]"
-            disabled={isSubmittingText}
-          />
+          Enable Voice Assistant
+        </button>
+      )}
 
-          {/* Voice Mic Toggle Button */}
-          <button
-            type="button"
-            onClick={voiceEnabled ? () => { setVoiceEnabled(false); synth.cancel(); } : enableVoice}
-            title={voiceEnabled ? "Disable Voice" : "Enable Voice Assistant"}
-            className={`p-2.5 rounded-full transition-all flex items-center justify-center cursor-pointer ${
-              voiceEnabled
-                ? "bg-green-600 text-white hover:bg-green-700 shadow-md animate-pulse"
-                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-            }`}
-          >
-            {voiceEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-          </button>
-
-          {/* Send Button */}
-          <button
-            type="submit"
-            disabled={!textInput.trim() || isSubmittingText}
-            title="Send Command"
-            className={`p-2.5 rounded-full transition-all flex items-center justify-center cursor-pointer ${
-              textInput.trim() && !isSubmittingText
-                ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md"
-                : "bg-gray-800 text-gray-500 cursor-not-allowed"
-            }`}
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </form>
-      </div>
+      {/* Listening Indicator - Shows when voice is enabled */}
+      {voiceEnabled && (
+        <div className="absolute bottom-10">
+          {listening ? (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <p className="text-gray-900 text-sm font-semibold">Listening...</p>
+            </div>
+          ) : isSpeakingRef.current ? (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+              <p className="text-gray-900 text-sm font-semibold">Speaking...</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+              <p className="text-gray-700 text-sm font-semibold">Ready</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
