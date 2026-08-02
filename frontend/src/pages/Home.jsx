@@ -246,9 +246,22 @@ const Home = () => {
     synth.speak(utter);
   };
 
-  // Handle voice commands
+  // Safe window opener helper to bypass popup blockers
+  const safeOpenUrl = (url) => {
+    try {
+      const win = window.open(url, "_blank");
+      if (!win || win.closed || typeof win.closed === "undefined") {
+        window.location.href = url;
+      }
+    } catch (e) {
+      window.location.href = url;
+    }
+  };
+
+  // Handle voice and text commands
   const handleCommand = (data) => {
     const { type, userInput, response } = data;
+    console.log("Executing command:", { type, userInput, response });
 
     // Speak the response
     if (response) {
@@ -257,33 +270,30 @@ const Home = () => {
 
     // Execute command actions
     if (type === "google_search") {
-      const query = encodeURIComponent(userInput);
-      window.open(`https://www.google.com/search?q=${query}`, "_blank");
+      const query = encodeURIComponent(userInput || "search");
+      safeOpenUrl(`https://www.google.com/search?q=${query}`);
     }
 
     if (type === "youtube_search" || type === "youtube_play") {
-      const query = encodeURIComponent(userInput);
-      window.open(
-        `https://www.youtube.com/results?search_query=${query}`,
-        "_blank"
-      );
+      const query = encodeURIComponent(userInput || "youtube");
+      safeOpenUrl(`https://www.youtube.com/results?search_query=${query}`);
     }
 
     if (type === "calculator_open") {
-      window.open("https://www.google.com/search?q=calculator", "_blank");
+      safeOpenUrl("https://www.google.com/search?q=calculator");
     }
 
     if (type === "instagram_open") {
-      window.open("https://www.instagram.com", "_blank");
+      safeOpenUrl("https://www.instagram.com");
     }
 
     if (type === "facebook_open") {
-      window.open("https://www.facebook.com", "_blank");
+      safeOpenUrl("https://www.facebook.com");
     }
 
     if (type === "weather_show") {
-      const query = encodeURIComponent(userInput);
-      window.open(`https://www.google.com/search?q=${query}`, "_blank");
+      const query = encodeURIComponent(userInput || "weather");
+      safeOpenUrl(`https://www.google.com/search?q=${query}`);
     }
   };
 

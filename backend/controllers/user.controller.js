@@ -251,28 +251,28 @@ export const askAssistant = async (req, res) => {
         return res.json({
           type,
           userInput: gemResult.userInput,
-          response: `Current time is ${moment().format("hh:mm A")}`,
+          response: `Current time is ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
         });
 
       case "get_date":
         return res.json({
           type,
           userInput: gemResult.userInput,
-          response: `Current date is ${moment().format("DD-MM-YYYY")}`,
+          response: `Current date is ${new Date().toLocaleDateString('en-GB')}`,
         });
 
       case "get_day":
         return res.json({
           type,
           userInput: gemResult.userInput,
-          response: `Today is ${moment().format("dddd")}`,
+          response: `Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long' })}`,
         });
 
       case "get_month":
         return res.json({
           type,
           userInput: gemResult.userInput,
-          response: `Current month is ${moment().format("MMMM")}`,
+          response: `Current month is ${new Date().toLocaleDateString('en-US', { month: 'long' })}`,
         });
 
       case "google_search":
