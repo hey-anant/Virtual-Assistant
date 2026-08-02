@@ -6,6 +6,7 @@ const aiImg = "/assets/ai.gif";
 const userImg = "/assets/user.gif";
 import { IoMenu } from "react-icons/io5";
 import { RxCross1 } from "react-icons/rx";
+import { Send, Mic, MicOff } from "lucide-react";
 
 const Home = () => {
   const {
@@ -21,6 +22,8 @@ const Home = () => {
   const [userText, setUserText] = useState("");
   const [aiText, setAiText] = useState("");
   const [listening, setListening] = useState(false);
+  const [textInput, setTextInput] = useState("");
+  const [isSubmittingText, setIsSubmittingText] = useState(false);
   const isSpeakingRef = useRef(false);
   const recognitionRef = useRef(null);
   const isRecognizingRef = useRef(false);
@@ -28,7 +31,35 @@ const Home = () => {
   const [ham, setHam] = useState(false);
   const isMountedRef = useRef(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const greetingUtteranceRef = useRef(null); // Track greeting separately
+  // Handle text command submission
+  const handleSendText = async (e) => {
+    if (e) e.preventDefault();
+    const command = textInput.trim();
+    if (!command || isSubmittingText) return;
+
+    setUserText(command);
+    setTextInput("");
+    setIsSubmittingText(true);
+    setAiText("Processing...");
+
+    try {
+      const data = await getGeminiResponse(command);
+      if (data && data.response) {
+        setAiText(data.response);
+        console.log("Response data from Gemini:", data);
+        handleCommand(data);
+      } else {
+        setAiText("Sorry, I couldn't process that request.");
+        speak("Sorry, I couldn't process that request.");
+      }
+    } catch (err) {
+      console.error("Text command error:", err);
+      setAiText("Sorry, an error occurred. Please try again.");
+      speak("Sorry, an error occurred. Please try again.");
+    } finally {
+      setIsSubmittingText(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -149,9 +180,16 @@ const Home = () => {
       return;
     }
 
-    // Only cancel if we're not in the middle of the initial greeting
-    if (!greetingUtteranceRef.current) {
-      synth.cancel();
+    try {
+      if (synth.paused) {
+        synth.resume();
+      }
+      // Cancel previous utterances to avoid queue deadlock
+      if (!greetingUtteranceRef.current) {
+        synth.cancel();
+      }
+    } catch (e) {
+      console.log("Synth cancel/resume error:", e);
     }
 
     const utter = new SpeechSynthesisUtterance(text);
@@ -177,7 +215,7 @@ const Home = () => {
     isSpeakingRef.current = true;
 
     utter.onstart = () => {
-      console.log("Speech started");
+      console.log("Speech started:", text);
       isSpeakingRef.current = true;
     };
 
@@ -190,7 +228,7 @@ const Home = () => {
         if (isMountedRef.current && voiceEnabled) {
           startRecognition();
         }
-      }, 800);
+      }, 500);
     };
 
     utter.onerror = (e) => {
@@ -202,7 +240,7 @@ const Home = () => {
         if (isMountedRef.current && voiceEnabled) {
           startRecognition();
         }
-      }, 800);
+      }, 500);
     };
 
     synth.speak(utter);
@@ -337,60 +375,9 @@ const Home = () => {
       isRecognizingRef.current = false;
       setListening(false);
 
-      // Check if the transcript contains the assistant name (with fuzzy matching)
-      const transcriptLower = transcript.toLowerCase();
-      const assistantNameLower = userData?.user.assistantName?.toLowerCase() || "";
+      console.log("Transcript received:", transcript);
       
-      // Simple Levenshtein distance for fuzzy matching
-      const levenshteinDistance = (a, b) => {
-        const matrix = [];
-        for (let i = 0; i <= b.length; i++) {
-          matrix[i] = [i];
-        }
-        for (let j = 0; j <= a.length; j++) {
-          matrix[0][j] = j;
-        }
-        for (let i = 1; i <= b.length; i++) {
-          for (let j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1) === a.charAt(j - 1)) {
-              matrix[i][j] = matrix[i - 1][j - 1];
-            } else {
-              matrix[i][j] = Math.min(
-                matrix[i - 1][j - 1] + 1,
-                matrix[i][j - 1] + 1,
-                matrix[i - 1][j] + 1
-              );
-            }
-          }
-        }
-        return matrix[b.length][a.length];
-      };
-
-      // Check for exact match or fuzzy match
-      const words = transcriptLower.split(' ');
-      let nameDetected = false;
-      
-      for (const word of words) {
-        // Exact match
-        if (word === assistantNameLower) {
-          nameDetected = true;
-          break;
-        }
-        // Fuzzy match (allow 1-2 character difference for names 4+ chars)
-        const distance = levenshteinDistance(word, assistantNameLower);
-        const threshold = assistantNameLower.length >= 4 ? 2 : 1;
-        if (distance <= threshold) {
-          nameDetected = true;
-          console.log(`Fuzzy match found: "${word}" ≈ "${assistantNameLower}" (distance: ${distance})`);
-          break;
-        }
-      }
-      
-      console.log("Transcript:", transcript);
-      console.log("Assistant name:", userData?.user.assistantName);
-      console.log("Name detected:", nameDetected);
-      
-      if (nameDetected) {
+      if (transcript && transcript.length > 0) {
         try {
           setAiText("Processing...");
           const data = await getGeminiResponse(transcript);
@@ -398,9 +385,9 @@ const Home = () => {
           if (data && data.response) {
             setUserText("");
             setAiText(data.response);
-            console.log("Response data:", data);
+            console.log("Response data from Gemini:", data);
 
-            // Handle the command
+            // Handle the command (open URL / search / etc.)
             handleCommand(data);
           } else {
             console.error("Invalid response data:", data);
@@ -415,14 +402,12 @@ const Home = () => {
           speak("Sorry, an error occurred. Please try again.");
         }
       } else {
-        // If assistant name not mentioned, clear text and restart
-        console.log("Assistant name not detected, restarting...");
         setTimeout(() => {
           setUserText("");
           if (isMountedRef.current && voiceEnabled) {
             startRecognition();
           }
-        }, 1500);
+        }, 800);
       }
     };
 
@@ -614,37 +599,73 @@ const Home = () => {
         </h1>
       )}
 
-      {/* Enable Voice Button - Shows when voice is not enabled */}
-      {!voiceEnabled && (
-        <button
-          onClick={enableVoice}
-          className="absolute bottom-10 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full font-semibold shadow-lg transition-all transform hover:scale-105"
-        >
-          Enable Voice Assistant
-        </button>
-      )}
+      {/* Dual Mode Command Bar (Text Input + Voice Mic Toggle + Send Button) */}
+      <div className="w-full max-w-[650px] px-4 absolute bottom-6 z-30 flex flex-col items-center gap-2">
+        {/* Voice status indicator if voice enabled */}
+        {voiceEnabled && (
+          <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-4 py-1 rounded-full text-white text-xs border border-white/10 shadow-md">
+            {listening ? (
+              <>
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span>Listening...</span>
+              </>
+            ) : isSpeakingRef.current ? (
+              <>
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                <span>Speaking...</span>
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                <span>Voice Ready</span>
+              </>
+            )}
+          </div>
+        )}
 
-      {/* Listening Indicator - Shows when voice is enabled */}
-      {voiceEnabled && (
-        <div className="absolute bottom-10">
-          {listening ? (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              <p className="text-white text-sm font-medium">Listening...</p>
-            </div>
-          ) : isSpeakingRef.current ? (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-              <p className="text-white text-sm font-medium">Speaking...</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-              <p className="text-gray-400 text-sm font-medium">Ready</p>
-            </div>
-          )}
-        </div>
-      )}
+        {/* Input Bar */}
+        <form
+          onSubmit={handleSendText}
+          className="w-full flex items-center gap-2 bg-black/85 backdrop-blur-xl border border-white/20 p-2 pl-5 rounded-full shadow-2xl transition-all focus-within:border-blue-500"
+        >
+          <input
+            type="text"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            placeholder="Type a command or use mic to speak..."
+            className="w-full bg-transparent outline-none text-white placeholder:text-gray-400 text-[15px]"
+            disabled={isSubmittingText}
+          />
+
+          {/* Voice Mic Toggle Button */}
+          <button
+            type="button"
+            onClick={voiceEnabled ? () => { setVoiceEnabled(false); synth.cancel(); } : enableVoice}
+            title={voiceEnabled ? "Disable Voice" : "Enable Voice Assistant"}
+            className={`p-2.5 rounded-full transition-all flex items-center justify-center cursor-pointer ${
+              voiceEnabled
+                ? "bg-green-600 text-white hover:bg-green-700 shadow-md animate-pulse"
+                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+            }`}
+          >
+            {voiceEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+          </button>
+
+          {/* Send Button */}
+          <button
+            type="submit"
+            disabled={!textInput.trim() || isSubmittingText}
+            title="Send Command"
+            className={`p-2.5 rounded-full transition-all flex items-center justify-center cursor-pointer ${
+              textInput.trim() && !isSubmittingText
+                ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md"
+                : "bg-gray-800 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 };

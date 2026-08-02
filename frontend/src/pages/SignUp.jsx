@@ -29,9 +29,15 @@ const SignUp = () => {
       setLoading(false);
       navigate("/customize");
     } catch (error) {
-      console.error(error);
+      console.error("SignUp error details:", error);
       setUserData(null);
-      setError(error.response?.data?.message || "Connection error. Please try again.");
+      if (error.response?.data?.message) {
+        setError(error.response.data.message);
+      } else if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
+        setError("Backend server is not reachable. Make sure server is running on http://localhost:3000");
+      } else {
+        setError(error.message || "Connection error. Please try again.");
+      }
       setLoading(false);
     }
   }

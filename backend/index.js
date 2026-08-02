@@ -20,10 +20,22 @@ connectDB();
 const app = express();
 app.use(express.json());
 
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    process.env.FRONTEND_URL
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || true,
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+            return callback(null, origin || true);
+        }
+        return callback(null, origin);
+    },
     credentials: true
-}))
+}));
 
 app.use(express.urlencoded({extended:true}));
 app.use(cookieParser());
