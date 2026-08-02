@@ -45,13 +45,13 @@ JSON response:`;
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents: prompt,
       });
       text = response.text ? response.text.trim() : "";
     } catch (sdkErr) {
       console.warn("SDK call failed, trying direct v1beta endpoint...", sdkErr.message);
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
       const result = await axios.post(
         apiUrl,
         { contents: [{ parts: [{ text: prompt }] }] },
