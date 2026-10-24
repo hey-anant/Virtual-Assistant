@@ -100,6 +100,7 @@ CLOUDINARY_API_KEY=your_cloudinary_api_key
 CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
 
+
 ---
 
 ### 3. Installation & Running Locally
@@ -121,4 +122,3 @@ npm run dev
 *Frontend application will start at `http://localhost:5173`*
 
 ---
-

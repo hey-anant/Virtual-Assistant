@@ -61,8 +61,10 @@ const extractJson = (text, command) => {
  * Falls back to offline keyword parsing if the API is unreachable.
  */
 const geminiResponse = async (command, assistantName, userName) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY not found in environment variables');
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey || apiKey === 'your_google_gemini_api_key') {
+        throw new Error('GEMINI_API_KEY is missing or still set to the README placeholder');
+    }
 
     const prompt = buildPrompt(command, assistantName, userName);
 
@@ -77,6 +79,13 @@ const geminiResponse = async (command, assistantName, userName) => {
             });
             text = response.text ? response.text.trim() : '';
         } catch (sdkErr) {
+            const status = sdkErr.status ?? sdkErr.response?.status;
+            if (status === 401 || status === 403) {
+                throw new Error(
+                    'Gemini API authentication failed. Create an API key in Google AI Studio and update backend/.env.'
+                );
+            }
+
             console.warn('Gemini SDK failed, trying REST fallback:', sdkErr.message);
             const result = await axios.post(
                 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
