@@ -1,116 +1,96 @@
-import { GoogleGenAI } from "@google/genai";
-import axios from "axios";
+import { GoogleGenAI } from '@google/genai';
+import axios from 'axios';
+import parseCommandOffline from './utils/commandParser.js';
 
-const geminiResponse = async (command, assistantName, userName) => {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY not found in environment variables");
-    }
+/**
+ * Builds the structured prompt sent to Gemini.
+ */
+const buildPrompt = (command, assistantName, userName) => `You are ${assistantName}, a virtual assistant created by ${userName}.
 
-    const prompt = `You are ${assistantName}, a virtual assistant created by ${userName}.
-
-Parse this voice command and return ONLY valid JSON (no markdown, no code blocks):
+Your ONLY job is to classify the command below and return a JSON object. No explanation. No markdown. Raw JSON only.
 
 Command: "${command}"
 
-Return this exact format:
-{"type":"TYPE","userInput":"QUERY","response":"MESSAGE"}
+Return EXACTLY this JSON format:
+{"type":"TYPE","userInput":"QUERY","response":"REPLY"}
 
-Types:
-- youtube_search/youtube_play: "open youtube", "play [something]", "search youtube for [something]"
-- google_search: "search for", "google [something]", "find information about"
-- get_time: "what time", "tell me the time", "current time"
-- get_date: "what date", "today's date", "what's the date"
-- get_day: "what day", "which day is it", "today is"
-- get_month: "what month", "which month", "current month"
-- calculator_open: "open calculator", "calculator"
-- instagram_open: "open instagram", "instagram"
-- facebook_open: "open facebook", "facebook"
-- weather_show: "weather", "temperature", "how's the weather"
-- general: everything else (greetings, questions, chitchat)
+TYPE must be one of these — choose the BEST match:
+- "google_search"    → any question, search, "what is", "who is", "how to", "find", "look up", "search for", or ANY general knowledge query
+- "youtube_search"  → "play", "open youtube", "watch", "search youtube", "youtube video"
+- "youtube_play"    → same as youtube_search
+- "get_time"        → "what time", "current time", "time now"
+- "get_date"        → "what date", "today's date", "date today"
+- "get_day"         → "what day", "which day", "day today"
+- "get_month"       → "what month", "current month"
+- "calculator_open" → "calculator", "open calculator", "calculate"
+- "instagram_open"  → "instagram", "open instagram"
+- "facebook_open"   → "facebook", "open facebook"
+- "weather_show"    → "weather", "temperature", "forecast", "how hot", "how cold"
+- "general"         → ONLY for greetings like "hello", "hi", "how are you", "who are you", "who made you"
 
-Rules:
-1. For searches: userInput should be ONLY the search query (remove "search for", "google", etc.)
-2. Remove the assistant name from userInput if present
-3. Keep response short and natural (max 10 words)
-4. If someone asks who created you, mention ${userName}
+STRICT RULES:
+1. If the command is a question or contains a topic to look up → use "google_search"
+2. userInput must be ONLY the search query — strip words like "search", "find", "google", "for", "look up", the assistant name
+3. response must be short and natural (under 10 words)
+4. If asked who created you → mention ${userName} in response, type = "general"
+5. NEVER return markdown, code fences, or extra text — ONLY the raw JSON object
 
-Now parse: "${command}"
-JSON response:`;
+Command to classify: "${command}"
+JSON:`;
 
-    console.log("Calling Gemini API...");
-    let text = "";
+/**
+ * Cleans raw text returned by Gemini to extract a valid JSON string.
+ */
+const extractJson = (text, command) => {
+    const cleaned = text
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .replace(/`/g, '')
+        .trim();
+
+    if (cleaned.startsWith('{')) return cleaned;
+
+    const jsonMatch = cleaned.match(/{[\s\S]*}/);
+    if (jsonMatch) return jsonMatch[0];
+
+    return JSON.stringify({ type: 'general', userInput: command, response: cleaned || "I'm here to help!" });
+};
+
+/**
+ * Calls the Gemini AI API and returns a structured JSON string.
+ * Falls back to offline keyword parsing if the API is unreachable.
+ */
+const geminiResponse = async (command, assistantName, userName) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY not found in environment variables');
+
+    const prompt = buildPrompt(command, assistantName, userName);
 
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-      });
-      text = response.text ? response.text.trim() : "";
-    } catch (sdkErr) {
-      console.warn("SDK call failed, trying direct v1beta endpoint...", sdkErr.message);
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
-      const result = await axios.post(
-        apiUrl,
-        { contents: [{ parts: [{ text: prompt }] }] },
-        { headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey } }
-      );
-      text = result.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+        let text = '';
+
+        try {
+            const ai = new GoogleGenAI({ apiKey });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            text = response.text ? response.text.trim() : '';
+        } catch (sdkErr) {
+            console.warn('Gemini SDK failed, trying REST fallback:', sdkErr.message);
+            const result = await axios.post(
+                'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+                { contents: [{ parts: [{ text: prompt }] }] },
+                { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey } }
+            );
+            text = result.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        }
+
+        return extractJson(text, command);
+    } catch (error) {
+        console.error('Gemini API error:', error.message);
+        return parseCommandOffline(command);
     }
-
-    console.log("Gemini raw response:", text);
-
-    // Clean up the response
-    text = text
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .replace(/`/g, "")
-      .trim();
-
-    if (!text.startsWith("{")) {
-      const jsonMatch = text.match(/{[\s\S]*}/);
-      if (jsonMatch) {
-        text = jsonMatch[0];
-      } else {
-        const fallbackResponse = {
-          type: "general",
-          userInput: command,
-          response: text || "I'm here to help!",
-        };
-        text = JSON.stringify(fallbackResponse);
-      }
-    }
-
-    return text;
-  } catch (error) {
-    console.error("Error fetching Gemini response:", error.message);
-    
-    // Fail-safe command parser fallback if AI service is temporarily unreachable
-    const cmdLower = (command || "").toLowerCase();
-    let fallback = { type: "general", userInput: command, response: "I am here to help you!" };
-
-    if (cmdLower.includes("youtube")) {
-      fallback = { type: "youtube_search", userInput: command.replace(/open|search|play|youtube/gi, "").trim() || "youtube", response: "Opening YouTube for you" };
-    } else if (cmdLower.includes("google") || cmdLower.includes("search")) {
-      fallback = { type: "google_search", userInput: command.replace(/google|search|for/gi, "").trim() || "search", response: "Searching on Google" };
-    } else if (cmdLower.includes("time")) {
-      fallback = { type: "get_time", userInput: "time", response: "Let me check the time" };
-    } else if (cmdLower.includes("date")) {
-      fallback = { type: "get_date", userInput: "date", response: "Let me check the date" };
-    } else if (cmdLower.includes("calculator")) {
-      fallback = { type: "calculator_open", userInput: "calculator", response: "Opening calculator" };
-    } else if (cmdLower.includes("instagram")) {
-      fallback = { type: "instagram_open", userInput: "instagram", response: "Opening Instagram" };
-    } else if (cmdLower.includes("facebook")) {
-      fallback = { type: "facebook_open", userInput: "facebook", response: "Opening Facebook" };
-    } else if (cmdLower.includes("weather")) {
-      fallback = { type: "weather_show", userInput: "weather", response: "Checking weather forecast" };
-    }
-
-    return JSON.stringify(fallback);
-  }
 };
 
 export default geminiResponse;

@@ -6,19 +6,18 @@ import connectDB from './config/db.js';
 import authRouter from './routes/auth.routes.js';
 import userRouter from './routes/user.routes.js';
 import cookieParser from 'cookie-parser';
-import cors from "cors"
-import geminiResponse from './gemini.js';
+import cors from 'cors';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
 
-console.log("MongoDB URI:", process.env.MONGODB_URI);
 connectDB();
-
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 const allowedOrigins = [
     'http://localhost:5173',
@@ -37,23 +36,13 @@ app.use(cors({
     credentials: true
 }));
 
-app.use(express.urlencoded({extended:true}));
-app.use(cookieParser());
 const PORT = process.env.PORT || 3000;
 
-app.use("/api/auth",authRouter);
-app.use("/api/user",userRouter);
-
-app.get("/", async (req,res)=>{
-    let prompt=req.query.command;
-    let data = await geminiResponse(prompt, "Assistant", "User");
-    res.json(data);
-})
+app.use('/api/auth', authRouter);
+app.use('/api/user', userRouter);
 
 app.listen(PORT, () => {
-    
-    console.log(`Server is running on port:${PORT}`);
+    console.log(`Server is running on port: ${PORT}`);
 });
 
-// Server ready
 export default app;
