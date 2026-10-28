@@ -43,6 +43,7 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
     const [listening, setListening] = useState(false);
     const [userText, setUserText] = useState('');
     const [aiText, setAiText] = useState('');
+    const [awaitingCommand, setAwaitingCommand] = useState(false);
 
     const synth = window.speechSynthesis;
     const isSpeakingRef = useRef(false);
@@ -50,17 +51,33 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
     const isRecognizingRef = useRef(false);
     const isMountedRef = useRef(true);
     const greetingUtteranceRef = useRef(null);
+    const awaitingCommandRef = useRef(false);
+    const assistantNameRef = useRef(assistantName || 'assistant');
     // Keep a live ref to voiceEnabled so callbacks always read the current value
     const voiceEnabledRef = useRef(voiceEnabled);
     useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
+    useEffect(() => {
+        if (voiceEnabled) return;
+
+        awaitingCommandRef.current = false;
+        setAwaitingCommand(false);
+        if (recognitionRef.current && isRecognizingRef.current) {
+            try { recognitionRef.current.stop(); } catch { /* ignore */ }
+        }
+        isRecognizingRef.current = false;
+        setListening(false);
+    }, [voiceEnabled]);
+    useEffect(() => {
+        assistantNameRef.current = (assistantName || 'assistant').trim().toLowerCase() || 'assistant';
+    }, [assistantName]);
 
     // ── Speech synthesis ─────────────────────────────────────────────────────
 
-    const applyPreferredVoice = (utterance) => {
+    const applyPreferredVoice = useCallback((utterance) => {
         const voices = synth.getVoices();
         const preferred = voices.find((v) => v.lang === 'en-US' || v.lang.startsWith('en'));
         if (preferred) utterance.voice = preferred;
-    };
+    }, [synth]);
 
     // startRecognition declared early so speak() can reference it
     const startRecognition = useCallback(() => {
@@ -111,7 +128,7 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
         };
 
         synth.speak(utter);
-    }, [startRecognition]);
+    }, [applyPreferredVoice, startRecognition, synth]);
 
     // ── Command handler ───────────────────────────────────────────────────────
 
@@ -124,8 +141,14 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
     // ── Voice enable (greeting) ───────────────────────────────────────────────
 
     const enableVoice = useCallback(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('Voice input is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
+            return;
+        }
+
         const greeting = new SpeechSynthesisUtterance(
-            `Hello ${userName}, how can I help you today?`
+            `Hello ${userName}. Say ${assistantName || 'assistant'} whenever you need me.`
         );
         greeting.lang = 'en-US';
         greetingUtteranceRef.current = greeting;
@@ -155,7 +178,7 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
             isSpeakingRef.current = true;
             synth.speak(greeting);
         }, 100);
-    }, [userName, startRecognition, setVoiceEnabled]);
+    }, [applyPreferredVoice, assistantName, startRecognition, synth, userName, setVoiceEnabled]);
 
     // ── Recognition useEffect ─────────────────────────────────────────────────
 
@@ -165,7 +188,7 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
 
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
-        recognition.lang = 'en-US';
+        recognition.lang = navigator.language || 'en-US';
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
 
@@ -211,36 +234,57 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
         };
 
         recognition.onresult = async (e) => {
+            if (!voiceEnabledRef.current) return;
             const transcript = e.results[e.results.length - 1][0].transcript.trim();
-            setUserText(transcript);
 
             try { recognition.stop(); } catch { /* ignore */ }
             isRecognizingRef.current = false;
             setListening(false);
 
-            if (transcript) {
-                try {
-                    setAiText('Processing...');
-                    const data = await getGeminiResponse(transcript);
-                    if (data?.response) {
-                        setUserText('');
-                        setAiText(data.response);
-                        handleCommand(data);
-                    } else {
-                        setAiText('');
-                        setUserText('');
-                        speak("Sorry, I couldn't process that request.");
-                    }
-                } catch {
+            const lowerTranscript = transcript.toLowerCase();
+            const wakeWord = assistantNameRef.current;
+            const wakeIndex = lowerTranscript.indexOf(wakeWord);
+            const command = awaitingCommandRef.current
+                ? transcript
+                : wakeIndex >= 0
+                    ? transcript.slice(wakeIndex + wakeWord.length).trim()
+                    : '';
+
+            if (!awaitingCommandRef.current && wakeIndex < 0) {
+                // Ignore conversations and other sounds while waiting for the wake word.
+                setTimeout(() => {
+                    if (isMountedRef.current && voiceEnabledRef.current) startRecognition();
+                }, 300);
+                return;
+            }
+
+            if (!command) {
+                awaitingCommandRef.current = true;
+                setAwaitingCommand(true);
+                setUserText('');
+                speak(`Yes, I'm listening.`);
+                return;
+            }
+
+            awaitingCommandRef.current = false;
+            setAwaitingCommand(false);
+            setUserText(command);
+            try {
+                setAiText('Processing...');
+                const data = await getGeminiResponse(command);
+                if (data?.response) {
+                    setUserText('');
+                    setAiText(data.response);
+                    handleCommand(data);
+                } else {
                     setAiText('');
                     setUserText('');
-                    speak('Sorry, an error occurred. Please try again.');
+                    speak("Sorry, I couldn't process that request.");
                 }
-            } else {
-                setTimeout(() => {
-                    setUserText('');
-                    if (isMountedRef.current && voiceEnabledRef.current) startRecognition();
-                }, 800);
+            } catch {
+                setAiText('');
+                setUserText('');
+                speak('Sorry, an error occurred. Please try again.');
             }
         };
 
@@ -253,6 +297,8 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
 
         return () => {
             isMountedRef.current = false;
+            awaitingCommandRef.current = false;
+            setAwaitingCommand(false);
             clearInterval(fallbackInterval);
             if (recognitionRef.current) {
                 try {
@@ -267,7 +313,7 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
             setListening(false);
             if (!greetingUtteranceRef.current) synth.cancel();
         };
-    }, [assistantName, userName, getGeminiResponse, handleCommand, speak, startRecognition]);
+    }, [getGeminiResponse, handleCommand, speak, startRecognition, synth]);
 
     return {
         listening,
@@ -276,6 +322,7 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
         aiText,
         setAiText,
         isSpeakingRef,
+        awaitingCommand,
         speak,
         handleCommand,
         startRecognition,
@@ -284,4 +331,3 @@ const useVoiceAssistant = ({ userName, assistantName, getGeminiResponse, voiceEn
 };
 
 export default useVoiceAssistant;
-

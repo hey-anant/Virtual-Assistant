@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { fetchCurrentUser, askAssistant } from '../api/assistant';
 
 export const userDataContext = createContext();
@@ -29,7 +29,7 @@ const UserContextProvider = ({ children }) => {
         }
     };
 
-    const getGeminiResponse = async (command) => {
+    const getGeminiResponse = useCallback(async (command) => {
         try {
             const result = await askAssistant(command);
             return result.data;
@@ -41,7 +41,7 @@ const UserContextProvider = ({ children }) => {
                 response: "Sorry, I couldn't process your request. Please try again.",
             };
         }
-    };
+    }, []);
 
     useEffect(() => {
         handleCurrentUser();

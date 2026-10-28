@@ -7,6 +7,7 @@ const CommandBar = ({
     isSubmittingText,
     voiceEnabled,
     listening,
+    awaitingCommand,
     isSpeakingRef,
     onSubmit,
     onToggleVoice,
@@ -18,6 +19,8 @@ const CommandBar = ({
                 <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-4 py-1 rounded-full text-white text-xs border border-white/10 shadow-md">
                     {listening ? (
                         <><div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /><span>Listening...</span></>
+                    ) : awaitingCommand ? (
+                        <><div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" /><span>Waiting for your command...</span></>
                     ) : isSpeakingRef.current ? (
                         <><div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" /><span>Speaking...</span></>
                     ) : (

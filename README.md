@@ -7,6 +7,7 @@ A full-stack, voice-activated AI Virtual Assistant web application built with **
 ## ✨ Features
 
 - 🎤 **Voice Recognition & Speech Synthesis**: Real-time voice interaction using the native Web Speech API.
+- 🟢 **Wake-word Listening**: Enable the mic once, then say the configured assistant name to activate the next command. Background speech is ignored until the wake word is detected.
 - 🧠 **Google Gemini AI Engine**: Parses voice commands dynamically and returns structured action responses.
 - 🎨 **Assistant Customization**: Choose preset avatars or upload custom avatar images (via Cloudinary) and name your personal assistant.
 - 🔐 **User Authentication**: Secure Signup/Login authentication using JWT tokens stored in HTTP-only cookies and Bcrypt password hashing.
@@ -122,3 +123,13 @@ npm run dev
 *Frontend application will start at `http://localhost:5173`*
 
 ---
+
+## 🎙️ Voice Usage
+
+1. Open the Home page and click the microphone button once to grant browser microphone permission.
+2. The assistant remains in passive listening mode and waits for the configured assistant name.
+3. Say the assistant name followed by a command, for example: `Jarvis, open YouTube`.
+4. You can also say only the name first; after the assistant replies, give the command in the next sentence.
+5. Disable the microphone button to stop background listening.
+
+Wake-word recognition uses the browser Web Speech API. Browser permission is required, and support/behavior can vary by browser and platform.

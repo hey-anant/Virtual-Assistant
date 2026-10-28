@@ -20,6 +20,7 @@ const Home = () => {
 
     const {
         listening,
+        awaitingCommand,
         userText,
         setUserText,
         aiText,
@@ -171,6 +172,7 @@ const Home = () => {
                 isSubmittingText={isSubmittingText}
                 voiceEnabled={voiceEnabled}
                 listening={listening}
+                awaitingCommand={awaitingCommand}
                 isSpeakingRef={isSpeakingRef}
                 onSubmit={handleSendText}
                 onToggleVoice={handleToggleVoice}
